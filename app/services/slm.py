@@ -1,5 +1,6 @@
 import os
 import torch
+import json
 from peft import PeftModel
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
@@ -16,18 +17,11 @@ class SLMService:
         self.tokenizer = None
 
     def load_model(self, model_type: str = "finetuned"):
-        """
-        model_type: 'base' or 'finetuned'
-        """
         if self.model is not None and self.current_model_type == model_type:
-            return  # Already loaded in memory
+            return
 
-        print(f"Loading local SLM model: '{model_type}'...")
-
-        # Determine path to base model/weights
         base_path = self.base_model_dir if os.path.exists(self.base_model_dir) else self.hub_fallback
 
-        # Load Tokenizer & Base Weights (Cached locally)
         self.tokenizer = AutoTokenizer.from_pretrained(
             base_path,
             cache_dir=self.cache_dir,
@@ -43,43 +37,72 @@ class SLMService:
         )
 
         if model_type == "finetuned" and os.path.exists(self.finetuned_model_dir):
-            print("Applying fine-tuned LoRA adapters...")
             self.model = PeftModel.from_pretrained(base_model, self.finetuned_model_dir)
         else:
             self.model = base_model
 
         self.current_model_type = model_type
 
-    def generate_answer(self, query: str, model_type: str = "finetuned") -> str:
-        self.load_model(model_type=model_type)
-
-        # Prepend system instruction into the user prompt (Gemma does not support system role)
-        system_instruction = "You are a helpful customer support assistant."
-        combined_user_prompt = f"{system_instruction}\n\nCustomer Question: {query}"
-
-        messages = [
-            {"role": "user", "content": combined_user_prompt}
-        ]
-
-        prompt = self.tokenizer.apply_chat_template(
-            messages,
-            tokenize=False,
-            add_generation_prompt=True
-        )
+    def generate_text(self, prompt_content: str) -> str:
+        messages = [{"role": "user", "content": prompt_content}]
+        prompt = self.tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
         inputs = self.tokenizer(prompt, return_tensors="pt").to(self.model.device)
 
         with torch.no_grad():
             outputs = self.model.generate(
                 **inputs,
                 max_new_tokens=256,
-                temperature=0.3,
+                temperature=0.2,
                 do_sample=True
             )
 
-        response_text = self.tokenizer.decode(
-            outputs[0][inputs.input_ids.shape[-1]:],
-            skip_special_tokens=True
+        return self.tokenizer.decode(outputs[0][inputs.input_ids.shape[-1]:], skip_special_tokens=True).strip()
+
+    def process_query_workflow(self, query: str, model_type: str = "finetuned"):
+        self.load_model(model_type=model_type)
+
+        # Subtask 1 & 2 via structured JSON prompt
+        eval_prompt = (
+            f"Analyze this query: \"{query}\"\n"
+            "Return valid JSON only with keys:\n"
+            "\"sentiment\": (\"Positive\", \"Neutral\", or \"Negative\")\n"
+            "\"human_intervention_required\": (true or false)"
         )
-        return response_text.strip()
+
+        raw_eval = self.generate_text(eval_prompt)
+
+        # Rule-based fallback parsing
+        sentiment = "Neutral"
+        needs_human = False
+        try:
+            cleaned_json = raw_eval[raw_eval.find("{"):raw_eval.rfind("}") + 1]
+            parsed = json.loads(cleaned_json)
+            sentiment = parsed.get("sentiment", "Neutral")
+            needs_human = bool(parsed.get("human_intervention_required", False))
+        except Exception:
+            if "negative" in raw_eval.lower():
+                sentiment = "Negative"
+            elif "positive" in raw_eval.lower():
+                sentiment = "Positive"
+            needs_human = "true" in raw_eval.lower()
+
+        # Subtask 3 Logic
+        if sentiment == "Positive" and needs_human:
+            answer = "Thank you for reaching out! We appreciate your positive feedback. We are routing your query to a human chat agent right away."
+        elif sentiment == "Positive" and not needs_human:
+            answer = f"Thank you! {self.generate_text(f'Answer helpfully: {query}')}"
+        elif sentiment == "Negative" and needs_human:
+            answer = "We sincerely apologize for the inconvenience caused. We are immediately routing your query to an account manager."
+        elif sentiment == "Negative" and not needs_human:
+            answer = f"We apologize for the issue. {self.generate_text(f'Apologize and respond: {query}')}"
+        else:
+            answer = self.generate_text(f"Respond to: {query}")
+
+        return {
+            "sentiment": sentiment,
+            "human_intervention_required": needs_human,
+            "answer": answer
+        }
+
 
 slm_service = SLMService()

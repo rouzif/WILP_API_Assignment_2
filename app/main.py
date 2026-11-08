@@ -4,7 +4,7 @@ from app.services.gemini import gemini_service
 from app.services.slm import slm_service
 from app.config import settings
 
-app = FastAPI(title="Multi-Model API Backend")
+app = FastAPI(title="Multi-Subtask Customer AI API")
 
 @app.post("/api/v1/customer-query", response_model=CustomerQueryResponse)
 async def process_customer_query(request: CustomerQueryRequest):
@@ -15,24 +15,26 @@ async def process_customer_query(request: CustomerQueryRequest):
 
     try:
         if provider == "base":
-            answer = slm_service.generate_answer(query=request.query, model_type="base")
-            model_used = "Gemma 2B (Base Model)"
+            result = slm_service.process_query_workflow(query=request.query, model_type="base")
+            model_used = "Gemma 2B (Base)"
         elif provider == "finetuned":
-            answer = slm_service.generate_answer(query=request.query, model_type="finetuned")
+            result = slm_service.process_query_workflow(query=request.query, model_type="finetuned")
             model_used = "Gemma 2B (Fine-Tuned)"
         else:
-            answer = gemini_service.generate_answer(query=request.query)
+            result = gemini_service.process_query_workflow(query=request.query)
             model_used = settings.DEFAULT_MODEL
             provider = "gemini"
 
         return CustomerQueryResponse(
             query=request.query,
-            answer=answer,
+            sentiment=result["sentiment"],
+            human_intervention_required=result["human_intervention_required"],
+            answer=result["answer"],
             model_used=model_used,
             provider=provider
         )
     except Exception as e:
         raise HTTPException(
             status_code=500,
-            detail=f"Error executing provider '{provider}': {str(e)}"
+            detail=f"Error processing workflow on provider '{provider}': {str(e)}"
         )
