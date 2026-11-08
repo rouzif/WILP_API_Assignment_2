@@ -5,3 +5,10 @@ python-dotenv
 pydantic
 streamlit
 requests
+torch
+transformers
+datasets
+peft
+trl
+bitsandbytes
+accelerate
