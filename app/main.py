@@ -12,16 +12,17 @@ async def process_customer_query(request: CustomerQueryRequest):
         raise HTTPException(status_code=400, detail="Query cannot be empty.")
 
     provider = (request.provider or "gemini").lower()
+    use_rag = request.use_rag
 
     try:
         if provider == "base":
-            result = slm_service.process_query_workflow(query=request.query, model_type="base")
+            result = slm_service.process_query_workflow(query=request.query, model_type="base", use_rag=use_rag)
             model_used = "Gemma 2B (Base)"
         elif provider == "finetuned":
-            result = slm_service.process_query_workflow(query=request.query, model_type="finetuned")
+            result = slm_service.process_query_workflow(query=request.query, model_type="finetuned", use_rag=use_rag)
             model_used = "Gemma 2B (Fine-Tuned)"
         else:
-            result = gemini_service.process_query_workflow(query=request.query)
+            result = gemini_service.process_query_workflow(query=request.query, use_rag=use_rag)
             model_used = settings.DEFAULT_MODEL
             provider = "gemini"
 
@@ -31,7 +32,8 @@ async def process_customer_query(request: CustomerQueryRequest):
             human_intervention_required=result["human_intervention_required"],
             answer=result["answer"],
             model_used=model_used,
-            provider=provider
+            provider=provider,
+            rag_enabled=use_rag
         )
     except Exception as e:
         raise HTTPException(

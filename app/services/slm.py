@@ -3,6 +3,7 @@ import torch
 import json
 from peft import PeftModel
 from transformers import AutoModelForCausalLM, AutoTokenizer
+from app.services.rag import rag_service  # 1. Import RAG Service
 
 
 class SLMService:
@@ -28,10 +29,13 @@ class SLMService:
             local_files_only=os.path.exists(self.base_model_dir)
         )
 
+        device = "mps" if torch.backends.mps.is_available() else ("cuda" if torch.cuda.is_available() else "cpu")
+        torch_dtype = torch.float16 if device in ["cuda", "mps"] else torch.float32
+
         base_model = AutoModelForCausalLM.from_pretrained(
             base_path,
-            torch_dtype=torch.float16 if torch.cuda.is_available() else torch.float32,
-            device_map="auto",
+            torch_dtype=torch_dtype,
+            device_map=device,
             cache_dir=self.cache_dir,
             local_files_only=os.path.exists(self.base_model_dir)
         )
@@ -58,8 +62,13 @@ class SLMService:
 
         return self.tokenizer.decode(outputs[0][inputs.input_ids.shape[-1]:], skip_special_tokens=True).strip()
 
-    def process_query_workflow(self, query: str, model_type: str = "finetuned"):
+    def process_query_workflow(self, query: str, model_type: str = "finetuned", use_rag: bool = False):
         self.load_model(model_type=model_type)
+
+        # 2. Retrieve RAG Context if enabled
+        context = ""
+        if use_rag:
+            context = rag_service.retrieve_context(query)
 
         # Subtask 1 & 2 via structured JSON prompt
         eval_prompt = (
@@ -86,17 +95,26 @@ class SLMService:
                 sentiment = "Positive"
             needs_human = "true" in raw_eval.lower()
 
-        # Subtask 3 Logic
+        # Helper to construct prompt with context
+        def build_response_prompt(instruction: str) -> str:
+            if context:
+                return f"{instruction}\n\nShopEase Official Policy Context:\n{context}\n\nCustomer Query: {query}"
+            return f"{instruction}\n\nCustomer Query: {query}"
+
+        # Subtask 3 Logic using retrieved RAG context when generating answers
         if sentiment == "Positive" and needs_human:
             answer = "Thank you for reaching out! We appreciate your positive feedback. We are routing your query to a human chat agent right away."
         elif sentiment == "Positive" and not needs_human:
-            answer = f"Thank you! {self.generate_text(f'Answer helpfully: {query}')}"
+            gen_prompt = build_response_prompt("Thank the customer and answer their query accurately using the provided policy context.")
+            answer = self.generate_text(gen_prompt)
         elif sentiment == "Negative" and needs_human:
             answer = "We sincerely apologize for the inconvenience caused. We are immediately routing your query to an account manager."
         elif sentiment == "Negative" and not needs_human:
-            answer = f"We apologize for the issue. {self.generate_text(f'Apologize and respond: {query}')}"
+            gen_prompt = build_response_prompt("Apologize to the customer for their issue and provide a solution using the provided policy context.")
+            answer = self.generate_text(gen_prompt)
         else:
-            answer = self.generate_text(f"Respond to: {query}")
+            gen_prompt = build_response_prompt("Answer the customer query clearly and helpfully using the provided policy context.")
+            answer = self.generate_text(gen_prompt)
 
         return {
             "sentiment": sentiment,

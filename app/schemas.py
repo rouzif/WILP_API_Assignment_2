@@ -13,6 +13,7 @@ class QueryAnalysis(BaseModel):
 class CustomerQueryRequest(BaseModel):
     query: str = Field(..., description="Customer query string.")
     provider: Optional[str] = Field("gemini", description="Options: 'gemini', 'base', 'finetuned'")
+    use_rag: bool = Field(False, description="Enable RAG context retrieval")
 
 class CustomerQueryResponse(BaseModel):
     query: str
@@ -21,3 +22,4 @@ class CustomerQueryResponse(BaseModel):
     answer: str
     model_used: str
     provider: str
+    rag_enabled: bool
