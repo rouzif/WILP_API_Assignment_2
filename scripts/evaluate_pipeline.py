@@ -7,6 +7,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import json
 import time
 import requests
+from pydantic import BaseModel, Field
 from google import genai
 from app.config import settings
 
@@ -15,6 +16,48 @@ DATASET_PATH = "./data/test_dataset.json"
 RESULTS_PATH = "./data/eval_results.json"
 
 client = genai.Client(api_key=settings.GEMINI_API_KEY)
+
+
+# 1. Pydantic schema for LLM Judge Correctness Evaluation
+class CorrectnessEvaluation(BaseModel):
+    score: int = Field(..., description="Score from 0 to 10 based on rubric match.")
+    reasoning: str = Field(..., description="Brief explanation of why the score was assigned.")
+
+
+def judge_correctness(query: str, generated_answer: str, ideal_answer: str) -> dict:
+    """
+    Evaluates generated answer against the ideal answer using LLM-as-a-Judge.
+    Rubric:
+    - 9-10: Fully accurate, contains all key facts from ideal answer, no contradictions.
+    - 6-8: Mostly accurate, covers main points but misses minor details.
+    - 3-5: Partially correct, contains minor factual errors or lacks key policy facts.
+    - 0-2: Incorrect, hallucinated, or completely misses the query intent.
+    """
+    if not generated_answer:
+        return {"score": 0, "reasoning": "No answer generated."}
+
+    judge_prompt = (
+        f"User Query: {query}\n\n"
+        f"Ideal Answer (Ground Truth): {ideal_answer}\n\n"
+        f"Generated Answer: {generated_answer}\n\n"
+        "Evaluate the Generated Answer against the Ideal Answer based on semantic correctness, policy accuracy, "
+        "and factual alignment. Assign a score between 0 and 10 and provide brief reasoning."
+    )
+
+    try:
+        res = client.models.generate_content(
+            model=settings.DEFAULT_MODEL,
+            contents=judge_prompt,
+            config={
+                "response_mime_type": "application/json",
+                "response_schema": CorrectnessEvaluation,
+                "temperature": 0.0
+            }
+        )
+        parsed = CorrectnessEvaluation.model_validate_json(res.text)
+        return {"score": parsed.score, "reasoning": parsed.reasoning}
+    except Exception as e:
+        return {"score": 5, "reasoning": f"Judge evaluation fallback due to error: {str(e)}"}
 
 
 def check_grounding(answer: str, query: str) -> bool:
@@ -52,6 +95,7 @@ def run_evaluation():
     correct_escalation = 0
     correct_complexity = 0
     grounded_count = 0
+    correctness_scores = []
 
     total = len(test_cases)
     start_all = time.time()
@@ -76,26 +120,26 @@ def run_evaluation():
             if resp.status_code == 200:
                 data = resp.json()
 
-                # Extract API responses with safe fallback for potential schema variations
                 sent = data.get("sentiment")
-
-                # Check for either key variation: 'human_intervention_required' or 'needs_human'
-                esc = data.get("human_intervention_required")
-                if esc is None:
-                    esc = data.get("needs_human", False)
-
-                # Check for either key variation: 'query_complexity' or 'complexity'
-                comp = data.get("query_complexity")
-                if comp is None:
-                    comp = data.get("complexity", "Simple")
-
+                esc = data.get("human_intervention_required") if data.get(
+                    "human_intervention_required") is not None else data.get("needs_human", False)
+                comp = data.get("query_complexity") if data.get("query_complexity") is not None else data.get(
+                    "complexity", "Simple")
                 ans = data.get("answer", "")
 
-                # Evaluate matches against ideal values
+                # Evaluation Matches
                 s_match = (str(sent).strip().lower() == str(item["ideal_sentiment"]).strip().lower())
                 e_match = (bool(esc) == bool(item["ideal_escalation"]))
                 c_match = (str(comp).strip().lower() == str(item["ideal_complexity"]).strip().lower())
                 grounded = check_grounding(ans, item["query"])
+
+                # 2. Judge LLM Correctness Evaluation
+                judge_eval = judge_correctness(
+                    query=item["query"],
+                    generated_answer=ans,
+                    ideal_answer=item.get("ideal_answer", "")
+                )
+                correctness_scores.append(judge_eval["score"])
 
                 if s_match: correct_sentiment += 1
                 if e_match: correct_escalation += 1
@@ -115,6 +159,9 @@ def run_evaluation():
                     "ideal_complexity": item["ideal_complexity"],
                     "complexity_match": c_match,
                     "generated_answer": ans,
+                    "ideal_answer": item.get("ideal_answer", ""),
+                    "correctness_score": judge_eval["score"],
+                    "correctness_reasoning": judge_eval["reasoning"],
                     "grounded": grounded,
                     "latency_sec": latency
                 })
@@ -126,6 +173,7 @@ def run_evaluation():
 
     total_time = time.time() - start_all
     throughput = round(total / total_time, 2) if total_time > 0 else 0
+    avg_correctness = round(sum(correctness_scores) / len(correctness_scores), 2) if correctness_scores else 0.0
 
     summary = {
         "total_queries": total,
@@ -133,6 +181,7 @@ def run_evaluation():
         "escalation_accuracy": round((correct_escalation / total) * 100, 2) if total else 0,
         "complexity_accuracy": round((correct_complexity / total) * 100, 2) if total else 0,
         "grounding_accuracy": round((grounded_count / total) * 100, 2) if total else 0,
+        "mean_correctness_score": avg_correctness,
         "avg_latency_sec": round(sum(latencies) / len(latencies), 2) if latencies else 0,
         "throughput_qps": throughput,
         "details": results
@@ -142,7 +191,7 @@ def run_evaluation():
     with open(RESULTS_PATH, "w") as f:
         json.dump(summary, f, indent=2)
 
-    print(f"Evaluation completed! Processed {len(results)}/{total} items. Saved to {RESULTS_PATH}.")
+    print(f"Evaluation complete! Mean Correctness Score: {avg_correctness}/10. Results saved to {RESULTS_PATH}.")
 
 
 if __name__ == "__main__":
