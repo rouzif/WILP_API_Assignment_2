@@ -1,0 +1,5 @@
+Ad Tech Solutions - Ad Bidding Mechanism:
+1. Ad delivery is determined via a real-time generalized second-price auction (GSP).
+2. Rank Score = Maximum Bid x Ad Quality Score (relevance, landing page experience, expected CTR).
+3. Winning bidders pay $0.01 more than the minimum amount required to hold their rank position above the next lower bidder.
+4. Smart Bidding options use machine learning for Target CPA and Target ROAS optimization.

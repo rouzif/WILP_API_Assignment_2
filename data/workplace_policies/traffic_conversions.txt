@@ -1,0 +1,4 @@
+Ad Tech Solutions - Analytics & Conversion Tracking:
+1. Install the AdTech Pixel or Measurement SDK on your website header to track visitor conversions and attribution.
+2. Conversion windows default to 30-day click-through and 1-day view-through attribution.
+3. Dashboard metrics update every 3 hours. Real-time conversions appear in the Live Traffic Debugger within 15 minutes.

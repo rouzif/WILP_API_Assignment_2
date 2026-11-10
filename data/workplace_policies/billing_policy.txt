@@ -1,0 +1,5 @@
+Ad Tech Solutions - Billing Policy:
+1. Automatic billing occurs when your spend reaches your account's Billing Threshold (e.g., $500) or on the 1st of every calendar month, whichever comes first.
+2. Accepted payment methods include corporate credit cards, wire transfers, and direct debit (ACH).
+3. If a payment fails, ad serving is paused immediately. A 3-day grace period is granted before account suspension.
+4. Refunds for unused pre-paid account balances take 10 to 14 business days after account closure approval.

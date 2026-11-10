@@ -1,0 +1,4 @@
+Ad Tech Solutions - Pricing Policy:
+1. Pricing operates on Cost-Per-Click (CPC), Cost-Per-Mille (CPM - per 1,000 impressions), or Cost-Per-Acquisition (CPA).
+2. Advertisers set maximum bid limits and daily spending caps. You are charged only when an ad interaction or impression occurs according to your chosen bidding strategy.
+3. Minimum campaign entry threshold is $10/day for search ads and $25/day for video campaign placements.

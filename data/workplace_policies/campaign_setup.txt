@@ -1,0 +1,5 @@
+Ad Tech Solutions - Campaign Setup Policy:
+1. To launch a new ad campaign, log into your Business Manager dashboard and navigate to Campaigns > Create New.
+2. Select your campaign objective: Brand Awareness, Lead Generation, or Traffic/Conversions.
+3. Configure daily budget limits, start/end dates, target geographical locations, and audience demographics.
+4. Ad creative assets (banners, copy, video URLs) must be uploaded at least 24 hours prior to launch for automated and manual policy review.
