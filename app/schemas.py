@@ -20,6 +20,7 @@ class CustomerQueryRequest(BaseModel):
     query: str = Field(..., description="Customer query string.")
     provider: Optional[str] = Field("gemini", description="Options: 'gemini', 'base', 'finetuned', 'router'")
     use_rag: bool = Field(False, description="Enable RAG context retrieval")
+    mode: Optional[str] = Field("vanilla", description="Options: 'vanilla' or 'workplace'")
 
 class CustomerQueryResponse(BaseModel):
     query: str

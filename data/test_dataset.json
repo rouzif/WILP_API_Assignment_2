@@ -1,0 +1,42 @@
+[
+  {
+    "id": 1,
+    "query": "How do I create a new ad campaign on your platform?",
+    "ideal_sentiment": "Neutral",
+    "ideal_escalation": false,
+    "ideal_complexity": "Simple",
+    "ideal_answer": "Log into your Business Manager dashboard, go to Campaigns > Create New, choose your objective, set your daily budget and target audience, and upload your creative assets at least 24 hours prior to launch."
+  },
+  {
+    "id": 2,
+    "query": "My payment failed and my ad campaign was paused! This is unacceptable service!",
+    "ideal_sentiment": "Negative",
+    "ideal_escalation": true,
+    "ideal_complexity": "Complex",
+    "ideal_answer": "We apologize for the inconvenience. Failed payments trigger an immediate pause in ad serving with a 3-day grace period. We are routing your issue to an account manager right away."
+  },
+  {
+    "id": 3,
+    "query": "How does the second-price ad bidding auction calculate my click cost?",
+    "ideal_sentiment": "Neutral",
+    "ideal_escalation": false,
+    "ideal_complexity": "Complex",
+    "ideal_answer": "Ad delivery is determined by Rank Score (Max Bid x Quality Score). As the winning bidder, you pay $0.01 more than the minimum amount needed to maintain your position above the next lower bidder."
+  },
+  {
+    "id": 4,
+    "query": "What is the minimum daily budget required for video ad campaigns?",
+    "ideal_sentiment": "Neutral",
+    "ideal_escalation": false,
+    "ideal_complexity": "Simple",
+    "ideal_answer": "The minimum campaign budget threshold for video ad placements is $25/day."
+  },
+  {
+    "id": 5,
+    "query": "Great job! My campaign conversions doubled this week, thanks!",
+    "ideal_sentiment": "Positive",
+    "ideal_escalation": false,
+    "ideal_complexity": "Simple",
+    "ideal_answer": "Thank you for reaching out! We are glad to hear your campaign performance doubled."
+  }
+]

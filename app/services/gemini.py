@@ -10,81 +10,6 @@ class GeminiService:
     def __init__(self):
         self.client = genai.Client(api_key=settings.GEMINI_API_KEY)
 
-    def process_query_workflow(self, query: str, model: str = settings.DEFAULT_MODEL, use_rag: bool = False):
-
-        context = ""
-        if use_rag:
-            context = rag_service.retrieve_context(query)
-            print(f"[DEBUG RAG CONTEXT]:\n{context}")  # Check your console to confirm context is retrieved!
-
-        # 1. Perform Subtask 1 & 2 using Structured Outputs
-        analysis_prompt = (
-            f"Analyze the following customer query:\n\n\"{query}\"\n\n"
-            "1. Classify sentiment as Positive, Neutral, or Negative.\n"
-            "2. Determine if human intervention is required (True/False)."
-        )
-
-        analysis_response = self.client.models.generate_content(
-            model=model,
-            contents=analysis_prompt,
-            config=types.GenerateContentConfig(
-                response_mime_type="application/json",
-                response_schema=QueryAnalysis,
-                temperature=0.1
-            )
-        )
-
-        analysis = QueryAnalysis.model_validate_json(analysis_response.text)
-        sentiment = analysis.sentiment
-        needs_human = analysis.human_intervention_required
-
-        # 3. Subtask 3 Logic & Response Generation
-        if sentiment == "Positive" and needs_human:
-            answer = "Thank you for reaching out! We appreciate your positive feedback. We are routing your query to a human chat agent right away."
-
-        elif sentiment == "Neutral" and needs_human:
-            answer = "We have received your request and we are routing your request directly to an account manager."
-
-        elif sentiment == "Negative" and needs_human:
-            answer = "We sincerely apologize for the experience you have faced. Your issue is being prioritized, and we are routing your request directly to an account manager."
-
-        elif sentiment == "Negative" and not needs_human:
-            gen_prompt = f"The customer query is negative: '{query}'. Apologize to the customer and respond to address their concern."
-            gen_prompt += f"\nUse the following ShopEase Official Policy Context to answer:\n{context}\n"
-            res = self.client.models.generate_content(model=model, contents=gen_prompt)
-            answer = res.text.strip()
-
-
-        else:
-
-            if use_rag and context:
-                # STRICT GROUNDING PROMPT FOR GEMINI
-                prompt = (
-                    "You are a customer support agent for ShopEase.\n"
-                    "STRICT INSTRUCTIONS: Answer the customer's question strictly using ONLY the provided policy context below. "
-                    "Do NOT invent facts, placeholders (like [Number]), or assume standard industry terms. "
-                    "If the answer is not contained in the context, say 'I do not have information on that policy.'\n\n"
-                    f"Official Policy Context:\n{context}\n\n"
-                    f"Customer Question: {query}"
-                )
-
-            else:
-                prompt = f"Customer Query: {query}\nProvide a general customer support answer."
-
-            res = self.client.models.generate_content(
-                model=model,
-                contents=prompt,
-                config=types.GenerateContentConfig(temperature=0.0)  # Lower temperature for strictly factual answers
-            )
-
-            answer = res.text.strip()
-
-        return {
-            "sentiment": sentiment,
-            "human_intervention_required": needs_human,
-            "answer": answer
-        }
-
     def classify_complexity(self, query: str, model: str = settings.DEFAULT_MODEL) -> str:
         prompt = (
             f"Analyze this customer support query:\n\"{query}\"\n\n"
@@ -106,7 +31,71 @@ class GeminiService:
             decision = RouterDecision.model_validate_json(response.text)
             return decision.complexity
         except Exception:
-            return "Complex"  # Fallback to safety
+            return "Complex"  # Fallback to Complex on failure
+
+    def process_query_workflow(
+            self,
+            query: str,
+            model: str = settings.DEFAULT_MODEL,
+            use_rag: bool = False,
+            domain: str = "vanilla"
+    ):
+        context = ""
+        if use_rag:
+            context = rag_service.retrieve_context(query, domain=domain)
+
+        # Sentiment & Escalation Analysis
+        analysis_prompt = (
+            f"Analyze query: \"{query}\". Classify sentiment (Positive, Neutral, Negative) "
+            "and decide if human intervention is required (true/false)."
+        )
+
+        analysis_response = self.client.models.generate_content(
+            model=model,
+            contents=analysis_prompt,
+            config=types.GenerateContentConfig(
+                response_mime_type="application/json",
+                response_schema=QueryAnalysis,
+                temperature=0.1
+            )
+        )
+
+        analysis = QueryAnalysis.model_validate_json(analysis_response.text)
+        sentiment = analysis.sentiment
+        needs_human = analysis.human_intervention_required
+
+        # Subtask 3 Response Generation
+        if sentiment == "Positive" and needs_human:
+            answer = "Thank you! We are routing your query to a human chat agent."
+        elif sentiment == "Negative" and needs_human:
+            answer = "We sincerely apologize for your experience. We are routing your issue to an account manager."
+        else:
+            if use_rag and context:
+                prompt = (
+                    "You are a helpful customer support agent.\n"
+                    "STRICT INSTRUCTIONS: Answer the customer's question strictly using ONLY the provided policy context below. "
+                    "Do NOT invent facts or placeholders. If the answer is not contained in the context, say 'I do not have information on that policy.'\n\n"
+                    f"Official Policy Context:\n{context}\n\n"
+                    f"Customer Question: {query}"
+                )
+            else:
+                prompt = f"Customer Query: {query}\nProvide a helpful customer support response."
+
+            res = self.client.models.generate_content(
+                model=model,
+                contents=prompt,
+                config=types.GenerateContentConfig(
+                    temperature=0.0,
+                    http_options=types.HttpOptions(timeout=30000)
+                )
+            )
+            answer = res.text.strip()
+
+        return {
+            "sentiment": sentiment,
+            "human_intervention_required": needs_human,
+            "answer": answer
+        }
 
 
 gemini_service = GeminiService()

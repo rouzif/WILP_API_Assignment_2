@@ -3,7 +3,7 @@ import torch
 import json
 from peft import PeftModel
 from transformers import AutoModelForCausalLM, AutoTokenizer
-from app.services.rag import rag_service  # 1. Import RAG Service
+from app.services.rag import rag_service
 
 
 class SLMService:
@@ -29,13 +29,10 @@ class SLMService:
             local_files_only=os.path.exists(self.base_model_dir)
         )
 
-        device = "mps" if torch.backends.mps.is_available() else ("cuda" if torch.cuda.is_available() else "cpu")
-        torch_dtype = torch.float16 if device in ["cuda", "mps"] else torch.float32
-
         base_model = AutoModelForCausalLM.from_pretrained(
             base_path,
-            torch_dtype=torch_dtype,
-            device_map=device,
+            torch_dtype=torch.float16 if torch.cuda.is_available() else torch.float32,
+            device_map="auto",
             cache_dir=self.cache_dir,
             local_files_only=os.path.exists(self.base_model_dir)
         )
@@ -62,13 +59,20 @@ class SLMService:
 
         return self.tokenizer.decode(outputs[0][inputs.input_ids.shape[-1]:], skip_special_tokens=True).strip()
 
-    def process_query_workflow(self, query: str, model_type: str = "finetuned", use_rag: bool = False):
+    # 1. Accept 'domain' parameter in process_query_workflow
+    def process_query_workflow(
+        self,
+        query: str,
+        model_type: str = "finetuned",
+        use_rag: bool = False,
+        domain: str = "vanilla"
+    ):
         self.load_model(model_type=model_type)
 
-        # 2. Retrieve RAG Context if enabled
+        # 2. Retrieve context passing the selected domain ('vanilla' vs 'workplace')
         context = ""
         if use_rag:
-            context = rag_service.retrieve_context(query)
+            context = rag_service.retrieve_context(query, domain=domain)
 
         # Subtask 1 & 2 via structured JSON prompt
         eval_prompt = (
@@ -98,10 +102,10 @@ class SLMService:
         # Helper to construct prompt with context
         def build_response_prompt(instruction: str) -> str:
             if context:
-                return f"{instruction}\n\nShopEase Official Policy Context:\n{context}\n\nCustomer Query: {query}"
+                return f"{instruction}\n\nOfficial Policy Context:\n{context}\n\nCustomer Query: {query}"
             return f"{instruction}\n\nCustomer Query: {query}"
 
-        # Subtask 3 Logic using retrieved RAG context when generating answers
+        # Subtask 3 Logic using retrieved RAG context
         if sentiment == "Positive" and needs_human:
             answer = "Thank you for reaching out! We appreciate your positive feedback. We are routing your query to a human chat agent right away."
         elif sentiment == "Positive" and not needs_human:
