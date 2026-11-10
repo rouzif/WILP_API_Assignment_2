@@ -2,7 +2,7 @@ import json
 from google import genai
 from google.genai import types
 from app.config import settings
-from app.schemas import QueryAnalysis
+from app.schemas import QueryAnalysis, RouterDecision
 from app.services.rag import rag_service
 
 
@@ -84,6 +84,29 @@ class GeminiService:
             "human_intervention_required": needs_human,
             "answer": answer
         }
+
+    def classify_complexity(self, query: str, model: str = settings.DEFAULT_MODEL) -> str:
+        prompt = (
+            f"Analyze this customer support query:\n\"{query}\"\n\n"
+            "Classify it as either 'Simple' or 'Complex'.\n"
+            "- 'Simple': Basic standard queries (e.g., store hours, standard return timeframe, basic shipping fee, simple greetings).\n"
+            "- 'Complex': Multi-part questions, edge cases, complaints requiring nuanced judgment, or policy exceptions."
+        )
+
+        try:
+            response = self.client.models.generate_content(
+                model=model,
+                contents=prompt,
+                config=types.GenerateContentConfig(
+                    response_mime_type="application/json",
+                    response_schema=RouterDecision,
+                    temperature=0.0
+                )
+            )
+            decision = RouterDecision.model_validate_json(response.text)
+            return decision.complexity
+        except Exception:
+            return "Complex"  # Fallback to safety
 
 
 gemini_service = GeminiService()

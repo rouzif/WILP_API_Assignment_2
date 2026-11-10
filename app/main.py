@@ -4,7 +4,8 @@ from app.services.gemini import gemini_service
 from app.services.slm import slm_service
 from app.config import settings
 
-app = FastAPI(title="Multi-Subtask Customer AI API")
+app = FastAPI(title="Multi-Subtask AI Support API")
+
 
 @app.post("/api/v1/customer-query", response_model=CustomerQueryResponse)
 async def process_customer_query(request: CustomerQueryRequest):
@@ -13,9 +14,25 @@ async def process_customer_query(request: CustomerQueryRequest):
 
     provider = (request.provider or "gemini").lower()
     use_rag = request.use_rag
+    query_complexity = None
+    routed_to = None
 
     try:
-        if provider == "base":
+        # Dynamic Router Pipeline Execution
+        if provider == "router":
+            query_complexity = gemini_service.classify_complexity(query=request.query)
+
+            if query_complexity == "Simple":
+                routed_to = "Fine-Tuned Gemma 2B (SLM)"
+                result = slm_service.process_query_workflow(query=request.query, model_type="finetuned",
+                                                            use_rag=use_rag)
+                model_used = "Dynamic Router -> Gemma 2B (Fine-Tuned)"
+            else:
+                routed_to = "Gemini 3.5 Flash Lite (Cloud LLM)"
+                result = gemini_service.process_query_workflow(query=request.query, use_rag=use_rag)
+                model_used = f"Dynamic Router -> {settings.DEFAULT_MODEL}"
+
+        elif provider == "base":
             result = slm_service.process_query_workflow(query=request.query, model_type="base", use_rag=use_rag)
             model_used = "Gemma 2B (Base)"
         elif provider == "finetuned":
@@ -33,10 +50,12 @@ async def process_customer_query(request: CustomerQueryRequest):
             answer=result["answer"],
             model_used=model_used,
             provider=provider,
-            rag_enabled=use_rag
+            rag_enabled=use_rag,
+            query_complexity=query_complexity,
+            routed_to=routed_to
         )
     except Exception as e:
         raise HTTPException(
             status_code=500,
-            detail=f"Error processing workflow on provider '{provider}': {str(e)}"
+            detail=f"Error executing provider '{provider}': {str(e)}"
         )

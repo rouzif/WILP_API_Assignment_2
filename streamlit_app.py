@@ -10,13 +10,15 @@ st.title("🤖 Customer Support AI (3-Subtask Workflow)")
 # Sidebar Controls
 st.sidebar.header("Configuration")
 
+# Model Provider Radio Selection (4 Options)
 model_provider = st.sidebar.radio(
     "Choose Active Model:",
-    options=["gemini", "base", "finetuned"],
+    options=["gemini", "base", "finetuned", "router"],
     format_func=lambda x: {
         "gemini": "Gemini 2.5 Flash Lite (Cloud API)",
         "base": "Gemma 2B (Base SLM)",
-        "finetuned": "Gemma 2B (Fine-Tuned SLM)"
+        "finetuned": "Gemma 2B (Fine-Tuned SLM)",
+        "router": "Dynamic Router (Gemini Classifier -> Gemma / Gemini)"
     }[x]
 )
 
@@ -29,13 +31,19 @@ if "messages" not in st.session_state:
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         if message["role"] == "assistant" and "sentiment" in message:
-            col1, col2, col3 = st.columns(3)
-            col1.metric("Subtask 1: Sentiment", message["sentiment"])
-            col2.metric("Subtask 2: Human Escalate", "Yes" if message["needs_human"] else "No")
-            col3.metric("RAG Status", "Active" if message["rag_status"] else "Disabled")
+            cols = st.columns(4 if message.get("complexity") else 3)
+            cols[0].metric("Subtask 1: Sentiment", message["sentiment"])
+            cols[1].metric("Subtask 2: Human Escalate", "Yes" if message["needs_human"] else "No")
+            cols[2].metric("RAG Status", "Active" if message["rag_status"] else "Disabled")
+
+            if message.get("complexity"):
+                cols[3].metric("Router Decision", message["complexity"])
 
             st.markdown(f"**Subtask 3 Response:**\n{message['content']}")
-            st.caption(f"Executed via `{message['model_used']}` | RAG Enabled: `{message['rag_status']}`")
+            caption_text = f"Executed via `{message['model_used']}` | RAG Enabled: `{message['rag_status']}`"
+            if message.get("routed_to"):
+                caption_text += f" | Routed Target: `{message['routed_to']}`"
+            st.caption(caption_text)
         else:
             st.markdown(message["content"])
 
@@ -46,7 +54,7 @@ if user_query := st.chat_input("Enter your customer query..."):
         st.markdown(user_query)
 
     with st.chat_message("assistant"):
-        with st.spinner("Analyzing subtasks & generating response..."):
+        with st.spinner("Analyzing query, routing & generating response..."):
             try:
                 response = requests.post(
                     API_URL,
@@ -55,7 +63,7 @@ if user_query := st.chat_input("Enter your customer query..."):
                         "provider": model_provider,
                         "use_rag": use_rag
                     },
-                    timeout=120
+                    timeout=60
                 )
 
                 if response.status_code == 200:
@@ -66,15 +74,28 @@ if user_query := st.chat_input("Enter your customer query..."):
                     answer = data.get("answer", "")
                     model_used = data.get("model_used", "")
                     rag_status = data.get("rag_enabled", False)
+                    complexity = data.get("query_complexity")
+                    routed_to = data.get("routed_to")
 
-                    # Render for current response turn
-                    col1, col2, col3 = st.columns(3)
-                    col1.metric("Subtask 1: Sentiment", sentiment)
-                    col2.metric("Subtask 2: Human Escalate", "Yes" if needs_human else "No")
-                    col3.metric("RAG Status", "Active" if rag_status else "Disabled")
+                    # Display Metrics (4 columns when router is active)
+                    if complexity:
+                        col1, col2, col3, col4 = st.columns(4)
+                        col1.metric("Subtask 1: Sentiment", sentiment)
+                        col2.metric("Subtask 2: Escalate", "Yes" if needs_human else "No")
+                        col3.metric("RAG Status", "Active" if rag_status else "Disabled")
+                        col4.metric("Router Decision", complexity)
+                    else:
+                        col1, col2, col3 = st.columns(3)
+                        col1.metric("Subtask 1: Sentiment", sentiment)
+                        col2.metric("Subtask 2: Escalate", "Yes" if needs_human else "No")
+                        col3.metric("RAG Status", "Active" if rag_status else "Disabled")
 
                     st.markdown(f"**Subtask 3 Response:**\n{answer}")
-                    st.caption(f"Executed via `{model_used}` | RAG Enabled: `{rag_status}`")
+
+                    caption_text = f"Executed via `{model_used}` | RAG Enabled: `{rag_status}`"
+                    if routed_to:
+                        caption_text += f" | Routed Target: `{routed_to}`"
+                    st.caption(caption_text)
 
                     # Store full metadata into session state
                     st.session_state.messages.append({
@@ -83,7 +104,9 @@ if user_query := st.chat_input("Enter your customer query..."):
                         "sentiment": sentiment,
                         "needs_human": needs_human,
                         "rag_status": rag_status,
-                        "model_used": model_used
+                        "model_used": model_used,
+                        "complexity": complexity,
+                        "routed_to": routed_to
                     })
                 else:
                     st.error(f"API Error ({response.status_code}): {response.text}")

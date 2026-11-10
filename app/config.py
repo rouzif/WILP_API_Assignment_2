@@ -5,7 +5,7 @@ load_dotenv()
 
 class Settings:
     GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "")
-    # Use gemini-2.5-flash or gemini-2.5-flash-lite as standard models
+    # Use gemini-3.5-flash-lite as standard models
     DEFAULT_MODEL: str = "gemini-3.5-flash-lite"
 
 settings = Settings()
