@@ -1,6 +1,8 @@
 import json
+import time
 from google import genai
 from google.genai import types
+from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 from app.config import settings
 from app.schemas import QueryAnalysis, RouterDecision
 from app.services.rag import rag_service
@@ -9,6 +11,19 @@ from app.services.rag import rag_service
 class GeminiService:
     def __init__(self):
         self.client = genai.Client(api_key=settings.GEMINI_API_KEY)
+
+    # Retry helper for Gemini API calls: retries twice (3 attempts max) with exponential backoff
+    @retry(
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=1, min=2, max=6),
+        reraise=True
+    )
+    def _call_gemini_with_retry(self, model: str, contents: str, config: types.GenerateContentConfig):
+        return self.client.models.generate_content(
+            model=model,
+            contents=contents,
+            config=config
+        )
 
     def classify_complexity(self, query: str, model: str = settings.DEFAULT_MODEL) -> str:
         prompt = (
@@ -19,18 +34,16 @@ class GeminiService:
         )
 
         try:
-            response = self.client.models.generate_content(
-                model=model,
-                contents=prompt,
-                config=types.GenerateContentConfig(
-                    response_mime_type="application/json",
-                    response_schema=RouterDecision,
-                    temperature=0.0
-                )
+            config = types.GenerateContentConfig(
+                response_mime_type="application/json",
+                response_schema=RouterDecision,
+                temperature=0.0
             )
+            response = self._call_gemini_with_retry(model, prompt, config)
             decision = RouterDecision.model_validate_json(response.text)
             return decision.complexity
-        except Exception:
+        except Exception as e:
+            print(f"[Gemini Retry Failed - Classify Complexity]: {str(e)}")
             return "Complex"  # Fallback to Complex on failure
 
     def process_query_workflow(
@@ -44,27 +57,26 @@ class GeminiService:
         if use_rag:
             context = rag_service.retrieve_context(query, domain=domain)
 
-        # Sentiment & Escalation Analysis
+        # 1. Sentiment & Escalation Analysis
         analysis_prompt = (
             f"Analyze query: \"{query}\". Classify sentiment (Positive, Neutral, Negative) "
             "and decide if human intervention is required (true/false)."
         )
 
-        analysis_response = self.client.models.generate_content(
-            model=model,
-            contents=analysis_prompt,
-            config=types.GenerateContentConfig(
-                response_mime_type="application/json",
-                response_schema=QueryAnalysis,
-                temperature=0.1
-            )
+        analysis_config = types.GenerateContentConfig(
+            response_mime_type="application/json",
+            response_schema=QueryAnalysis,
+            temperature=0.1
         )
+
+        # Wrapped API Call with Retry Logic
+        analysis_response = self._call_gemini_with_retry(model, analysis_prompt, analysis_config)
 
         analysis = QueryAnalysis.model_validate_json(analysis_response.text)
         sentiment = analysis.sentiment
         needs_human = analysis.human_intervention_required
 
-        # Subtask 3 Response Generation
+        # 2. Subtask 3 Response Generation
         if sentiment == "Positive" and needs_human:
             answer = "Thank you! We are routing your query to a human chat agent."
         elif sentiment == "Negative" and needs_human:
@@ -81,14 +93,13 @@ class GeminiService:
             else:
                 prompt = f"Customer Query: {query}\nProvide a helpful customer support response."
 
-            res = self.client.models.generate_content(
-                model=model,
-                contents=prompt,
-                config=types.GenerateContentConfig(
-                    temperature=0.0,
-                    http_options=types.HttpOptions(timeout=30000)
-                )
+            gen_config = types.GenerateContentConfig(
+                temperature=0.0,
+                http_options=types.HttpOptions(timeout=30000)
             )
+
+            # Wrapped API Call with Retry Logic
+            res = self._call_gemini_with_retry(model, prompt, gen_config)
             answer = res.text.strip()
 
         return {

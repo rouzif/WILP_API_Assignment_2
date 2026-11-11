@@ -9,6 +9,7 @@ import time
 import requests
 from pydantic import BaseModel, Field
 from google import genai
+from tenacity import retry, stop_after_attempt, wait_exponential
 from app.config import settings
 
 API_URL = "http://127.0.0.1:8000/api/v1/customer-query"
@@ -17,22 +18,31 @@ RESULTS_PATH = "./data/eval_results.json"
 
 client = genai.Client(api_key=settings.GEMINI_API_KEY)
 
-
-# 1. Pydantic schema for LLM Judge Correctness Evaluation
 class CorrectnessEvaluation(BaseModel):
     score: int = Field(..., description="Score from 0 to 10 based on rubric match.")
     reasoning: str = Field(..., description="Brief explanation of why the score was assigned.")
 
+# Generic retry helper for evaluation LLM calls
+@retry(
+    stop=stop_after_attempt(3),
+    wait=wait_exponential(multiplier=1, min=2, max=5),
+    reraise=True
+)
+def call_gemini_judge_with_retry(model: str, prompt: str, response_schema=None):
+    config = {"temperature": 0.0}
+    if response_schema:
+        config["response_mime_type"] = "application/json"
+        config["response_schema"] = response_schema
+    else:
+        config["response_mime_type"] = "application/json"
+
+    return client.models.generate_content(
+        model=model,
+        contents=prompt,
+        config=config
+    )
 
 def judge_correctness(query: str, generated_answer: str, ideal_answer: str) -> dict:
-    """
-    Evaluates generated answer against the ideal answer using LLM-as-a-Judge.
-    Rubric:
-    - 9-10: Fully accurate, contains all key facts from ideal answer, no contradictions.
-    - 6-8: Mostly accurate, covers main points but misses minor details.
-    - 3-5: Partially correct, contains minor factual errors or lacks key policy facts.
-    - 0-2: Incorrect, hallucinated, or completely misses the query intent.
-    """
     if not generated_answer:
         return {"score": 0, "reasoning": "No answer generated."}
 
@@ -45,18 +55,15 @@ def judge_correctness(query: str, generated_answer: str, ideal_answer: str) -> d
     )
 
     try:
-        res = client.models.generate_content(
+        res = call_gemini_judge_with_retry(
             model=settings.DEFAULT_MODEL,
-            contents=judge_prompt,
-            config={
-                "response_mime_type": "application/json",
-                "response_schema": CorrectnessEvaluation,
-                "temperature": 0.0
-            }
+            prompt=judge_prompt,
+            response_schema=CorrectnessEvaluation
         )
         parsed = CorrectnessEvaluation.model_validate_json(res.text)
         return {"score": parsed.score, "reasoning": parsed.reasoning}
     except Exception as e:
+        print(f"[Judge Evaluation Retry Failed]: {str(e)}")
         return {"score": 5, "reasoning": f"Judge evaluation fallback due to error: {str(e)}"}
 
 
@@ -69,14 +76,14 @@ def check_grounding(answer: str, query: str) -> bool:
         "Reply strictly with JSON: {\"grounded\": true} or {\"grounded\": false}"
     )
     try:
-        res = client.models.generate_content(
+        res = call_gemini_judge_with_retry(
             model=settings.DEFAULT_MODEL,
-            contents=prompt,
-            config={"response_mime_type": "application/json"}
+            prompt=prompt
         )
         parsed = json.loads(res.text)
         return bool(parsed.get("grounded", True))
-    except Exception:
+    except Exception as e:
+        print(f"[Grounding Check Retry Failed]: {str(e)}")
         return True
 
 

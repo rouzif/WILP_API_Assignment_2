@@ -4,9 +4,9 @@
   "escalation_accuracy": 60.0,
   "complexity_accuracy": 80.0,
   "grounding_accuracy": 40.0,
-  "mean_correctness_score": 5.2,
-  "avg_latency_sec": 15.67,
-  "throughput_qps": 0.05,
+  "mean_correctness_score": 6.8,
+  "avg_latency_sec": 18.89,
+  "throughput_qps": 0.04,
   "details": [
     {
       "id": 1,
@@ -23,9 +23,9 @@
       "generated_answer": "Thank you for reaching out! We appreciate your positive feedback. We are routing your query to a human chat agent right away.",
       "ideal_answer": "Log into your Business Manager dashboard, go to Campaigns > Create New, choose your objective, set your daily budget and target audience, and upload your creative assets at least 24 hours prior to launch.",
       "correctness_score": 0,
-      "correctness_reasoning": "The generated answer completely fails to address the user's query about creating a new ad campaign, providing an irrelevant response and deflecting to human support instead of supplying the steps provided in the ideal answer.",
+      "correctness_reasoning": "The generated answer completely ignores the user query about creating an ad campaign, provides irrelevant text about positive feedback, and fails to offer any of the factual steps from the ideal answer.",
       "grounded": false,
-      "latency_sec": 12.34
+      "latency_sec": 15.39
     },
     {
       "id": 2,
@@ -41,10 +41,10 @@
       "complexity_match": true,
       "generated_answer": "We sincerely apologize for your experience. We are routing your issue to an account manager.",
       "ideal_answer": "We apologize for the inconvenience. Failed payments trigger an immediate pause in ad serving with a 3-day grace period. We are routing your issue to an account manager right away.",
-      "correctness_score": 8,
-      "correctness_reasoning": "The generated answer captures the essential customer service tone and the core action of routing the issue to an account manager, though it misses the specific detail about the 3-day grace period mentioned in the ideal answer.",
+      "correctness_score": 9,
+      "correctness_reasoning": "The generated answer captures the essential apology and escalation steps from the ideal answer, omitting only the specific detail about the 3-day grace period, but maintaining high semantic correctness and tone.",
       "grounded": false,
-      "latency_sec": 4.92
+      "latency_sec": 3.8
     },
     {
       "id": 3,
@@ -58,12 +58,12 @@
       "predicted_complexity": "Simple",
       "ideal_complexity": "Complex",
       "complexity_match": false,
-      "generated_answer": "The second-price ad bidding auction calculates your click cost based on the following steps:\n\n1. **Rank Score Calculation:** Your ad's rank score is determined by multiplying your maximum bid by the ad quality score. This score considers factors like ad relevance, landing page experience, and expected click-through rate (CTR).\n2. **Winning Bidder:** The ad with the highest rank score wins the auction.\n3. **Winning Bidder's Cost:** The winning bidder pays the amount equal to their maximum bid plus $0.01 more than the minimum amount required to hold their rank position above the next lower bidder.\n4. **Actual Cost:** The cost you pay for each click is the winning bid amount plus the $0.01 premium.\n\nTherefore, the second-price ad bidding auction calculates your click cost by considering the winning bid amount, the $0.01 premium, and the actual cost of the ad interaction or impression.",
+      "generated_answer": "The second-price ad bidding auction determines your click cost based on the following steps:\n\n1. **Rank Score Calculation:** Your ad's Rank Score is calculated by multiplying your maximum bid by the ad quality score. This score considers factors like ad relevance, landing page experience, and expected click-through rate (CTR).\n2. **Winning Bidder's Cost:** The winning bidder pays the maximum bid amount, which is the highest bid received for the ad.\n3. **Additional Cost:** The winning bidder pays an additional $0.01 more than the minimum amount required to hold their rank position above the next lower bidder. This additional cost is the second price component.\n\nTherefore, your click cost is determined by the winning bid amount, plus the additional $0.01 for the second price component.\n\nIf you have any further questions or need clarification on any aspect of our ad bidding mechanism or pricing policy, please don't hesitate to reach out to our support team.",
       "ideal_answer": "Ad delivery is determined by Rank Score (Max Bid x Quality Score). As the winning bidder, you pay $0.01 more than the minimum amount needed to maintain your position above the next lower bidder.",
-      "correctness_score": 3,
-      "correctness_reasoning": "The generated answer introduces factual inaccuracies regarding how cost is calculated in a second-price auction. Specifically, it states the winner pays 'their maximum bid plus $0.01 more than the minimum amount required', which misunderstands second-price mechanics where the winner pays the *next lower bidder's* implied price plus $0.01, not their own maximum bid.",
-      "grounded": false,
-      "latency_sec": 35.14
+      "correctness_score": 6,
+      "correctness_reasoning": "The generated answer correctly identifies the Rank Score calculation and the $0.01 increment rule for the second-price auction. However, it contains a factual error in step 2 by stating that the winning bidder pays their maximum bid amount, which contradicts the concept of a second-price auction and the ideal answer where the winner actually pays the minimum amount needed to beat the next competitor plus $0.01.",
+      "grounded": true,
+      "latency_sec": 37.65
     },
     {
       "id": 4,
@@ -77,12 +77,12 @@
       "predicted_complexity": "Simple",
       "ideal_complexity": "Simple",
       "complexity_match": true,
-      "generated_answer": "The minimum daily budget required for video ad campaigns is $25. This ensures that your campaign is active and reaches the target audience.",
+      "generated_answer": "The minimum daily budget required for video ad campaigns is $25. This ensures that your campaign is active and reaches the desired audience.",
       "ideal_answer": "The minimum campaign budget threshold for video ad placements is $25/day.",
       "correctness_score": 10,
-      "correctness_reasoning": "The generated answer accurately captures the minimum daily budget of $25 as stated in the ideal answer, while also providing context that is factually consistent.",
+      "correctness_reasoning": "The generated answer accurately captures the minimum daily budget of $25 as stated in the ideal answer, while adding a brief context that aligns well with standard campaign information.",
       "grounded": true,
-      "latency_sec": 9.97
+      "latency_sec": 13.15
     },
     {
       "id": 5,
@@ -96,12 +96,12 @@
       "predicted_complexity": "Simple",
       "ideal_complexity": "Simple",
       "complexity_match": true,
-      "generated_answer": "That's fantastic to hear, and we're thrilled that your campaign conversions have doubled this week! We're committed to helping you achieve your desired results, and we're here to answer any further questions you may have. Feel free to reach out to us if you need assistance with anything else.",
+      "generated_answer": "That's fantastic to hear, and we're thrilled that your campaign conversions have doubled this week! We're committed to providing you with the best possible support and results, and we're glad to see the positive impact of our Ad Tech Solutions.\n\nIf you have any further questions or need assistance with any other aspect of your campaign, please don't hesitate to reach out to us. We're here to help you achieve your goals and ensure your satisfaction.",
       "ideal_answer": "Thank you for reaching out! We are glad to hear your campaign performance doubled.",
-      "correctness_score": 5,
-      "correctness_reasoning": "Judge evaluation fallback due to error: 503 UNAVAILABLE. {'error': {'code': 503, 'message': 'This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later.', 'status': 'UNAVAILABLE'}}",
-      "grounded": true,
-      "latency_sec": 15.98
+      "correctness_score": 9,
+      "correctness_reasoning": "The generated answer captures the positive sentiment and key information of the ideal answer, successfully acknowledging the doubled conversions and expressing gladness. While it is much more verbose and adds promotional language not in the ideal answer, it remains semantically correct and contextually appropriate.",
+      "grounded": false,
+      "latency_sec": 24.44
     }
   ]
 }

@@ -14,3 +14,4 @@ bitsandbytes
 accelerate
 chromadb
 sentence-transformers
+tenacity
