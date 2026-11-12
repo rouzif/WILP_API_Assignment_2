@@ -1,17 +1,28 @@
+# Web Framework & API Server
 fastapi
 uvicorn[standard]
-google-genai
-python-dotenv
 pydantic
-streamlit
+pydantic-settings
+python-dotenv
 requests
+httpx
+
+# Frontend & Dashboard
+streamlit
+
+# LLM API & Resilience
+google-genai
+tenacity
+
+# Local SLM Inference & LoRA Fine-Tuning
 torch
 transformers
 datasets
 peft
 trl
-bitsandbytes
 accelerate
+bitsandbytes
+
+# RAG & Vector Store
 chromadb
 sentence-transformers
-tenacity

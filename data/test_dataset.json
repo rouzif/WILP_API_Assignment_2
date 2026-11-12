@@ -43,5 +43,185 @@
     "ideal_escalation": false,
     "ideal_complexity": "Simple",
     "ideal_answer": "Thank you for reaching out! We are glad to hear your campaign performance doubled."
+  },
+  {
+    "id": 6,
+    "query": "What is the minimum daily budget for search ad campaigns?",
+    "requires_policy": true,
+    "ideal_sentiment": "Neutral",
+    "ideal_escalation": false,
+    "ideal_complexity": "Simple",
+    "ideal_answer": "The minimum daily budget for search ad campaigns is $10/day."
+  },
+  {
+    "id": 7,
+    "query": "How early do I need to upload my ad creative assets before a campaign starts?",
+    "requires_policy": true,
+    "ideal_sentiment": "Neutral",
+    "ideal_escalation": false,
+    "ideal_complexity": "Simple",
+    "ideal_answer": "You must upload your ad creative assets (banners, copy, video URLs) at least 24 hours prior to campaign launch for automated and manual policy review."
+  },
+  {
+    "id": 8,
+    "query": "What campaign objectives can I select when setting up a new campaign?",
+    "requires_policy": true,
+    "ideal_sentiment": "Neutral",
+    "ideal_escalation": false,
+    "ideal_complexity": "Simple",
+    "ideal_answer": "You can choose between Brand Awareness, Lead Generation, or Traffic/Conversions when setting up a new campaign."
+  },
+  {
+    "id": 9,
+    "query": "I was double charged on my invoice this month! Transfer me to a human manager immediately.",
+    "requires_policy": false,
+    "ideal_sentiment": "Negative",
+    "ideal_escalation": true,
+    "ideal_complexity": "Complex",
+    "ideal_answer": "We sincerely apologize for the inconvenience caused. We are immediately routing your billing dispute to an account manager."
+  },
+  {
+    "id": 10,
+    "query": "Can I run ads for cryptocurrency or unverified financial products?",
+    "requires_policy": true,
+    "ideal_sentiment": "Neutral",
+    "ideal_escalation": false,
+    "ideal_complexity": "Simple",
+    "ideal_answer": "Unverified financial products and unregulated cryptocurrency promotions are restricted under our advertising content policies and require prior compliance certification."
+  },
+  {
+    "id": 11,
+    "query": "Your analytics dashboard is super intuitive and saved our marketing team hours!",
+    "requires_policy": false,
+    "ideal_sentiment": "Positive",
+    "ideal_escalation": false,
+    "ideal_complexity": "Simple",
+    "ideal_answer": "Thank you for the kind feedback! We are thrilled to hear the analytics dashboard is helping your team."
+  },
+  {
+    "id": 12,
+    "query": "How many days do I have to fix a failed payment before my account is suspended?",
+    "requires_policy": true,
+    "ideal_sentiment": "Neutral",
+    "ideal_escalation": false,
+    "ideal_complexity": "Simple",
+    "ideal_answer": "Failed payments trigger an immediate pause in ad serving with a 3-day grace period to update your payment method before further account restrictions apply."
+  },
+  {
+    "id": 13,
+    "query": "What factors make up the Rank Score in your ad auction, and how does Quality Score affect my cost?",
+    "requires_policy": true,
+    "ideal_sentiment": "Neutral",
+    "ideal_escalation": false,
+    "ideal_complexity": "Complex",
+    "ideal_answer": "Rank Score is calculated as Max Bid multiplied by Quality Score. A higher Quality Score increases your Rank Score, allowing you to win placements at a lower actual cost-per-click above the next bidder."
+  },
+  {
+    "id": 14,
+    "query": "My ad has been stuck in policy review for over 48 hours and our product launch is tomorrow. Please escalate this!",
+    "requires_policy": false,
+    "ideal_sentiment": "Negative",
+    "ideal_escalation": true,
+    "ideal_complexity": "Complex",
+    "ideal_answer": "We sincerely apologize for the delay with your ad review. We are routing your urgent launch issue to a human support specialist right away."
+  },
+  {
+    "id": 15,
+    "query": "Love the new audience targeting options! Can someone from your enterprise team reach out to discuss higher spend tiers?",
+    "requires_policy": false,
+    "ideal_sentiment": "Positive",
+    "ideal_escalation": true,
+    "ideal_complexity": "Complex",
+    "ideal_answer": "Thank you for reaching out! We appreciate your positive feedback and are routing your query to a human chat agent to discuss enterprise spend tiers."
+  },
+  {
+    "id": 16,
+    "query": "What audience targeting settings can I configure during campaign setup?",
+    "requires_policy": true,
+    "ideal_sentiment": "Neutral",
+    "ideal_escalation": false,
+    "ideal_complexity": "Simple",
+    "ideal_answer": "During campaign setup, you can configure target geographical locations and audience demographics alongside your daily budget and start/end dates."
+  },
+  {
+    "id": 17,
+    "query": "Why did my ad get rejected even though I uploaded my video creative 24 hours early, and what is the minimum budget I need if I switch to a search campaign?",
+    "requires_policy": true,
+    "ideal_sentiment": "Negative",
+    "ideal_escalation": false,
+    "ideal_complexity": "Complex",
+    "ideal_answer": "We apologize for the frustration. Ad creatives undergo both automated and manual policy review for content compliance beyond the 24-hour lead time, and if you switch to a search campaign, the minimum daily budget is $10/day."
+  },
+  {
+    "id": 18,
+    "query": "Hi there, can you help me with a quick question about my ad account?",
+    "requires_policy": false,
+    "ideal_sentiment": "Neutral",
+    "ideal_escalation": false,
+    "ideal_complexity": "Simple",
+    "ideal_answer": "Hello! I would be happy to help you with your ad account. What would you like to know?"
+  },
+  {
+    "id": 19,
+    "query": "What file formats or creative assets are required when launching a campaign?",
+    "requires_policy": true,
+    "ideal_sentiment": "Neutral",
+    "ideal_escalation": false,
+    "ideal_complexity": "Simple",
+    "ideal_answer": "You need to upload your ad creative assets—such as banners, ad copy, and video URLs—at least 24 hours before campaign launch."
+  },
+  {
+    "id": 20,
+    "query": "This is ridiculous—my account was suspended without warning and I am losing thousands of dollars every hour!",
+    "requires_policy": false,
+    "ideal_sentiment": "Negative",
+    "ideal_escalation": true,
+    "ideal_complexity": "Complex",
+    "ideal_answer": "We sincerely apologize for the disruption to your business. We are immediately routing your account suspension issue to an account manager."
+  },
+  {
+    "id": 21,
+    "query": "If I want to run both a search campaign and a video campaign simultaneously, what is the combined minimum daily budget I must commit?",
+    "requires_policy": true,
+    "ideal_sentiment": "Neutral",
+    "ideal_escalation": false,
+    "ideal_complexity": "Complex",
+    "ideal_answer": "Since search campaigns require a $10/day minimum and video campaigns require a $25/day minimum, running both simultaneously requires a combined minimum daily budget of $35/day."
+  },
+  {
+    "id": 22,
+    "query": "Your support team resolved my tracking pixel issue super fast yesterday, really appreciate it!",
+    "requires_policy": false,
+    "ideal_sentiment": "Positive",
+    "ideal_escalation": false,
+    "ideal_complexity": "Simple",
+    "ideal_answer": "Thank you for the positive feedback! We are glad our team could quickly resolve your tracking pixel issue."
+  },
+  {
+    "id": 23,
+    "query": "Can I speak to a live representative about setting up custom conversion attribution for our agency?",
+    "requires_policy": false,
+    "ideal_sentiment": "Neutral",
+    "ideal_escalation": true,
+    "ideal_complexity": "Complex",
+    "ideal_answer": "I am routing your request to a human support specialist who can assist you with custom agency conversion attribution."
+  },
+  {
+    "id": 24,
+    "query": "What happens to my active ads immediately after an automatic billing charge fails?",
+    "requires_policy": true,
+    "ideal_sentiment": "Neutral",
+    "ideal_escalation": false,
+    "ideal_complexity": "Simple",
+    "ideal_answer": "Failed payments trigger an immediate pause in ad serving, and you are given a 3-day grace period to resolve the billing issue."
+  },
+  {
+    "id": 25,
+    "query": "We saw a 40% drop in ROAS after our last campaign update and the reporting metrics look inaccurate. Can you check our account?",
+    "requires_policy": false,
+    "ideal_sentiment": "Negative",
+    "ideal_escalation": true,
+    "ideal_complexity": "Complex",
+    "ideal_answer": "We apologize for the drop in performance and reporting concerns. We are routing your account to a human support specialist to investigate."
   }
 ]
