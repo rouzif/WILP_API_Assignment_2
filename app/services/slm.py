@@ -109,9 +109,9 @@ class SLMService:
                 return f"{instruction}\n\nOfficial Policy Context:\n{context}\n\n{history_str}Customer Query: {query}"
             return f"{instruction}\n\n{history_str}Customer Query: {query}"
 
-        if sentiment == "Positive" and needs_human:
-            answer = "Thank you for reaching out! We appreciate your positive feedback. We are routing your query to a human chat agent right away."
-        elif sentiment == "Positive" and not needs_human:
+        if sentiment in ["Positive", "Neutral"] and needs_human:
+            answer = "Thank you for reaching out!. We are routing your query to a human chat agent right away."
+        elif sentiment in ["Positive", "Neutral"] and not needs_human:
             gen_prompt = build_response_prompt(
                 "Thank the customer and answer their query accurately using the provided policy context.")
             answer = self.generate_text(gen_prompt)

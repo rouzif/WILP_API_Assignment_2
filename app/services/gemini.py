@@ -75,7 +75,7 @@ class GeminiService:
         needs_human = analysis.human_intervention_required
 
         # 2. Subtask 3 Multi-Turn Response Generation
-        if sentiment == "Positive" and needs_human:
+        if sentiment in ["Positive", "Neutral"] and needs_human:
             answer = "Thank you! We are routing your query to a human chat agent."
         elif sentiment == "Negative" and needs_human:
             answer = "We sincerely apologize for your experience. We are routing your issue to an account manager."
