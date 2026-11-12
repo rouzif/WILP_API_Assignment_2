@@ -97,7 +97,32 @@ DEFAULT_MODEL=gemini-2.5-flash-lite
 
 ---
 
-## 5. Run the FastAPI Backend
+## 5. Set Up & Populate the RAG Vector Database (ChromaDB)
+
+Before running the API or UI with RAG enabled, initialize the local **ChromaDB** persistent vector store (`./data/chroma_db`) and index both policy collections (`shopease_policies` for Vanilla mode and `adtech_workplace_policies` for Workplace mode):
+
+1. **Run the RAG ingestion script** (or initialize via `rag_service`):
+   ```bash
+   python scripts/ingest_rag.py
+   ```
+   *(If your repository initializes collections inside `app/services/rag.py`, run the initializer one-liner below to build the embeddings on disk:)*
+   ```bash
+   python -c "from app.services.rag import rag_service; print('RAG Vector DB initialized successfully!')"
+   ```
+
+2. **Verify the Vector Store Collections**:
+   Confirm that `./data/chroma_db` has been created and contains indexed documents:
+   ```bash
+   python -c "import chromadb; client = chromadb.PersistentClient(path='./data/chroma_db'); print([c.name for c in client.list_collections()])"
+   ```
+   Expected output:
+   ```text
+   ['shopease_policies', 'adtech_workplace_policies']
+   ```
+
+---
+
+## 6. Run the FastAPI Backend
 
 Start the FastAPI server using `uvicorn`:
 
@@ -110,7 +135,7 @@ uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
 
 ---
 
-## 6. Run the Streamlit Chatbot UI
+## 7. Run the Streamlit Chatbot UI
 
 Open a **new terminal window**, activate your `venv`, and launch the Streamlit conversational interface:
 
@@ -127,7 +152,7 @@ streamlit run streamlit_app.py
 
 ---
 
-## 7. Run the Automated Evaluation & Dashboard
+## 8. Run the Automated Evaluation & Dashboard
 
 Ensure the **FastAPI backend is running** (`uvicorn app.main:app --port 8000`), then execute the benchmark script in a separate terminal:
 
