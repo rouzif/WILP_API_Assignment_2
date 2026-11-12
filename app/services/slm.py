@@ -59,22 +59,21 @@ class SLMService:
 
         return self.tokenizer.decode(outputs[0][inputs.input_ids.shape[-1]:], skip_special_tokens=True).strip()
 
-    # 1. Accept 'domain' parameter in process_query_workflow
     def process_query_workflow(
-        self,
-        query: str,
-        model_type: str = "finetuned",
-        use_rag: bool = False,
-        domain: str = "vanilla"
+            self,
+            query: str,
+            model_type: str = "finetuned",
+            use_rag: bool = False,
+            domain: str = "vanilla",
+            chat_history: list = None
     ):
         self.load_model(model_type=model_type)
 
-        # 2. Retrieve context passing the selected domain ('vanilla' vs 'workplace')
         context = ""
         if use_rag:
             context = rag_service.retrieve_context(query, domain=domain)
 
-        # Subtask 1 & 2 via structured JSON prompt
+        # Sentiment & Escalation Analysis
         eval_prompt = (
             f"Analyze this query: \"{query}\"\n"
             "Return valid JSON only with keys:\n"
@@ -84,7 +83,6 @@ class SLMService:
 
         raw_eval = self.generate_text(eval_prompt)
 
-        # Rule-based fallback parsing
         sentiment = "Neutral"
         needs_human = False
         try:
@@ -99,25 +97,33 @@ class SLMService:
                 sentiment = "Positive"
             needs_human = "true" in raw_eval.lower()
 
-        # Helper to construct prompt with context
+        # Multi-turn prompt helper
         def build_response_prompt(instruction: str) -> str:
-            if context:
-                return f"{instruction}\n\nOfficial Policy Context:\n{context}\n\nCustomer Query: {query}"
-            return f"{instruction}\n\nCustomer Query: {query}"
+            history_str = ""
+            if chat_history:
+                history_str = "Prior Conversation History:\n" + "\n".join(
+                    [f"{msg.get('role', 'user').capitalize()}: {msg.get('content', '')}" for msg in chat_history[-6:]]
+                ) + "\n\n"
 
-        # Subtask 3 Logic using retrieved RAG context
+            if context:
+                return f"{instruction}\n\nOfficial Policy Context:\n{context}\n\n{history_str}Customer Query: {query}"
+            return f"{instruction}\n\n{history_str}Customer Query: {query}"
+
         if sentiment == "Positive" and needs_human:
             answer = "Thank you for reaching out! We appreciate your positive feedback. We are routing your query to a human chat agent right away."
         elif sentiment == "Positive" and not needs_human:
-            gen_prompt = build_response_prompt("Thank the customer and answer their query accurately using the provided policy context.")
+            gen_prompt = build_response_prompt(
+                "Thank the customer and answer their query accurately using the provided policy context.")
             answer = self.generate_text(gen_prompt)
         elif sentiment == "Negative" and needs_human:
             answer = "We sincerely apologize for the inconvenience caused. We are immediately routing your query to an account manager."
         elif sentiment == "Negative" and not needs_human:
-            gen_prompt = build_response_prompt("Apologize to the customer for their issue and provide a solution using the provided policy context.")
+            gen_prompt = build_response_prompt(
+                "Apologize to the customer for their issue and provide a solution using the provided policy context.")
             answer = self.generate_text(gen_prompt)
         else:
-            gen_prompt = build_response_prompt("Answer the customer query clearly and helpfully using the provided policy context.")
+            gen_prompt = build_response_prompt(
+                "Answer the customer query clearly and helpfully using the provided policy context.")
             answer = self.generate_text(gen_prompt)
 
         return {
@@ -125,6 +131,5 @@ class SLMService:
             "human_intervention_required": needs_human,
             "answer": answer
         }
-
 
 slm_service = SLMService()

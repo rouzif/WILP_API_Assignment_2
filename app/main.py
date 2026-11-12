@@ -14,32 +14,43 @@ async def process_customer_query(request: CustomerQueryRequest):
 
     provider = (request.provider or "gemini").lower()
     use_rag = request.use_rag
+    mode = request.mode or "vanilla"
+    history = [msg.model_dump() for msg in request.chat_history] if request.chat_history else []
+
     query_complexity = None
     routed_to = None
 
     try:
-        # Dynamic Router Pipeline Execution
         if provider == "router":
             query_complexity = gemini_service.classify_complexity(query=request.query)
 
             if query_complexity == "Simple":
                 routed_to = "Fine-Tuned Gemma 2B (SLM)"
-                result = slm_service.process_query_workflow(query=request.query, model_type="finetuned",
-                                                            use_rag=use_rag, domain=request.mode)
+                result = slm_service.process_query_workflow(
+                    query=request.query, model_type="finetuned", use_rag=use_rag, domain=mode, chat_history=history
+                )
                 model_used = "Dynamic Router -> Gemma 2B (Fine-Tuned)"
             else:
-                routed_to = "Gemini 3.5 Flash Lite (Cloud LLM)"
-                result = gemini_service.process_query_workflow(query=request.query, use_rag=use_rag, domain=request.mode)
+                routed_to = "Gemini 2.5 Flash Lite (Cloud LLM)"
+                result = gemini_service.process_query_workflow(
+                    query=request.query, use_rag=use_rag, domain=mode, chat_history=history
+                )
                 model_used = f"Dynamic Router -> {settings.DEFAULT_MODEL}"
 
         elif provider == "base":
-            result = slm_service.process_query_workflow(query=request.query, model_type="base", use_rag=use_rag, domain=request.mode)
+            result = slm_service.process_query_workflow(
+                query=request.query, model_type="base", use_rag=use_rag, domain=mode, chat_history=history
+            )
             model_used = "Gemma 2B (Base)"
         elif provider == "finetuned":
-            result = slm_service.process_query_workflow(query=request.query, model_type="finetuned", use_rag=use_rag, domain=request.mode)
+            result = slm_service.process_query_workflow(
+                query=request.query, model_type="finetuned", use_rag=use_rag, domain=mode, chat_history=history
+            )
             model_used = "Gemma 2B (Fine-Tuned)"
         else:
-            result = gemini_service.process_query_workflow(query=request.query, use_rag=use_rag, domain=request.mode)
+            result = gemini_service.process_query_workflow(
+                query=request.query, use_rag=use_rag, domain=mode, chat_history=history
+            )
             model_used = settings.DEFAULT_MODEL
             provider = "gemini"
 
@@ -51,6 +62,7 @@ async def process_customer_query(request: CustomerQueryRequest):
             model_used=model_used,
             provider=provider,
             rag_enabled=use_rag,
+            mode=mode,
             query_complexity=query_complexity,
             routed_to=routed_to
         )

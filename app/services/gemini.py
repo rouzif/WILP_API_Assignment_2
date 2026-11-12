@@ -51,13 +51,14 @@ class GeminiService:
             query: str,
             model: str = settings.DEFAULT_MODEL,
             use_rag: bool = False,
-            domain: str = "vanilla"
+            domain: str = "vanilla",
+            chat_history: list = None
     ):
         context = ""
         if use_rag:
             context = rag_service.retrieve_context(query, domain=domain)
 
-        # 1. Sentiment & Escalation Analysis
+        # 1. Sentiment & Escalation Analysis on current turn
         analysis_prompt = (
             f"Analyze query: \"{query}\". Classify sentiment (Positive, Neutral, Negative) "
             "and decide if human intervention is required (true/false)."
@@ -68,37 +69,41 @@ class GeminiService:
             response_schema=QueryAnalysis,
             temperature=0.1
         )
-
-        # Wrapped API Call with Retry Logic
         analysis_response = self._call_gemini_with_retry(model, analysis_prompt, analysis_config)
-
         analysis = QueryAnalysis.model_validate_json(analysis_response.text)
         sentiment = analysis.sentiment
         needs_human = analysis.human_intervention_required
 
-        # 2. Subtask 3 Response Generation
+        # 2. Subtask 3 Multi-Turn Response Generation
         if sentiment == "Positive" and needs_human:
             answer = "Thank you! We are routing your query to a human chat agent."
         elif sentiment == "Negative" and needs_human:
             answer = "We sincerely apologize for your experience. We are routing your issue to an account manager."
         else:
+            # Build conversation context string
+            history_str = ""
+            if chat_history:
+                history_str = "Prior Conversation History:\n" + "\n".join(
+                    [f"{msg.get('role', 'user').capitalize()}: {msg.get('content', '')}" for msg in chat_history[-6:]]
+                ) + "\n\n"
+
             if use_rag and context:
                 prompt = (
-                    "You are a helpful customer support agent.\n"
+                    "You are a helpful customer support agent maintaining a continuous conversation.\n"
                     "STRICT INSTRUCTIONS: Answer the customer's question strictly using ONLY the provided policy context below. "
                     "Do NOT invent facts or placeholders. If the answer is not contained in the context, say 'I do not have information on that policy.'\n\n"
                     f"Official Policy Context:\n{context}\n\n"
+                    f"{history_str}"
                     f"Customer Question: {query}"
                 )
             else:
-                prompt = f"Customer Query: {query}\nProvide a helpful customer support response."
+                prompt = f"{history_str}Customer Query: {query}\nProvide a helpful customer support response."
 
             gen_config = types.GenerateContentConfig(
                 temperature=0.0,
                 http_options=types.HttpOptions(timeout=30000)
             )
 
-            # Wrapped API Call with Retry Logic
             res = self._call_gemini_with_retry(model, prompt, gen_config)
             answer = res.text.strip()
 
@@ -107,6 +112,5 @@ class GeminiService:
             "human_intervention_required": needs_human,
             "answer": answer
         }
-
 
 gemini_service = GeminiService()
