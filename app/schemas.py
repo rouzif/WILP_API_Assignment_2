@@ -14,7 +14,7 @@ class RouterDecision(BaseModel):
     complexity: Literal["Simple", "Complex"] = Field(
         ..., description="Classify query complexity. 'Simple' for routine questions, 'Complex' for multi-part, policy edge cases, or ambiguous queries."
     )
-    reasoning: str = Field(..., description="Brief reason for the complexity rating.")
+    reasoning: Optional[str] = None
 
 class ChatMessage(BaseModel):
     role: Literal["user", "assistant"] = Field(..., description="Role of the message author")

@@ -1,6 +1,5 @@
 import os
 import torch
-import json
 from peft import PeftModel
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from app.services.rag import rag_service
@@ -22,6 +21,8 @@ class SLMService:
             return
 
         base_path = self.base_model_dir if os.path.exists(self.base_model_dir) else self.hub_fallback
+        device = "mps" if torch.backends.mps.is_available() else ("cuda" if torch.cuda.is_available() else "cpu")
+        dtype = torch.float16 if device in ["cuda", "mps"] else torch.float32
 
         self.tokenizer = AutoTokenizer.from_pretrained(
             base_path,
@@ -31,17 +32,17 @@ class SLMService:
 
         base_model = AutoModelForCausalLM.from_pretrained(
             base_path,
-            torch_dtype=torch.float16 if torch.cuda.is_available() else torch.float32,
-            device_map="auto",
+            torch_dtype=dtype,
             cache_dir=self.cache_dir,
             local_files_only=os.path.exists(self.base_model_dir)
-        )
+        ).to(device)
 
         if model_type == "finetuned" and os.path.exists(self.finetuned_model_dir):
-            self.model = PeftModel.from_pretrained(base_model, self.finetuned_model_dir)
+            self.model = PeftModel.from_pretrained(base_model, self.finetuned_model_dir).to(device)
         else:
             self.model = base_model
 
+        self.model.eval()
         self.current_model_type = model_type
 
     def generate_text(self, prompt_content: str) -> str:
@@ -49,10 +50,10 @@ class SLMService:
         prompt = self.tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
         inputs = self.tokenizer(prompt, return_tensors="pt").to(self.model.device)
 
-        with torch.no_grad():
+        with torch.inference_mode():
             outputs = self.model.generate(
                 **inputs,
-                max_new_tokens=256,
+                max_new_tokens=150,
                 temperature=0.2,
                 do_sample=True
             )
@@ -60,76 +61,72 @@ class SLMService:
         return self.tokenizer.decode(outputs[0][inputs.input_ids.shape[-1]:], skip_special_tokens=True).strip()
 
     def process_query_workflow(
-            self,
-            query: str,
-            model_type: str = "finetuned",
-            use_rag: bool = False,
-            domain: str = "vanilla",
-            chat_history: list = None
+        self,
+        query: str,
+        model_type: str = "finetuned",
+        use_rag: bool = False,
+        domain: str = "vanilla",
+        chat_history: list = None,
+        sentiment: str = "Neutral",
+        needs_human: bool = False
     ):
+        # Immediate escalation routing without loading local SLM weights
+        if sentiment == "Positive" and needs_human:
+            return {
+                "sentiment": sentiment,
+                "human_intervention_required": needs_human,
+                "answer": "Thank you for reaching out! We appreciate your positive feedback. We are routing your query to a human chat agent right away."
+            }
+        elif sentiment == "Negative" and needs_human:
+            return {
+                "sentiment": sentiment,
+                "human_intervention_required": needs_human,
+                "answer": "We sincerely apologize for the inconvenience caused. We are immediately routing your query to an account manager."
+            }
+        elif sentiment == "Neutral" and needs_human:
+            return {
+                "sentiment": sentiment,
+                "human_intervention_required": needs_human,
+                "answer": "I am routing your request to a human support specialist who can assist you further."
+            }
+
+        # Load SLM only when generating a Subtask 3 response
         self.load_model(model_type=model_type)
 
         context = ""
         if use_rag:
             context = rag_service.retrieve_context(query, domain=domain)
 
-        # Sentiment & Escalation Analysis
-        eval_prompt = (
-            f"Analyze this query: \"{query}\"\n"
-            "Return valid JSON only with keys:\n"
-            "\"sentiment\": (\"Positive\", \"Neutral\", or \"Negative\")\n"
-            "\"human_intervention_required\": (true or false)"
-        )
-
-        raw_eval = self.generate_text(eval_prompt)
-
-        sentiment = "Neutral"
-        needs_human = False
-        try:
-            cleaned_json = raw_eval[raw_eval.find("{"):raw_eval.rfind("}") + 1]
-            parsed = json.loads(cleaned_json)
-            sentiment = parsed.get("sentiment", "Neutral")
-            needs_human = bool(parsed.get("human_intervention_required", False))
-        except Exception:
-            if "negative" in raw_eval.lower():
-                sentiment = "Negative"
-            elif "positive" in raw_eval.lower():
-                sentiment = "Positive"
-            needs_human = "true" in raw_eval.lower()
-
-        # Multi-turn prompt helper
         def build_response_prompt(instruction: str) -> str:
+            strict_rule = (
+                "STRICT RULE: Use ONLY the facts in the policy context below. "
+                "Do NOT invent contact details, phone numbers, URLs, or bracketed placeholders."
+            )
             history_str = ""
             if chat_history:
+                recent_history = chat_history[-4:]
                 history_str = "Prior Conversation History:\n" + "\n".join(
-                    [f"{msg.get('role', 'user').capitalize()}: {msg.get('content', '')}" for msg in chat_history[-6:]]
+                    [f"{msg.get('role', 'user').capitalize()}: {msg.get('content', '')}" for msg in recent_history]
                 ) + "\n\n"
 
             if context:
-                return f"{instruction}\n\nOfficial Policy Context:\n{context}\n\n{history_str}Customer Query: {query}"
-            return f"{instruction}\n\n{history_str}Customer Query: {query}"
+                return f"{instruction}\n{strict_rule}\n\nOfficial Policy Context:\n{context}\n\n{history_str}Customer Query: {query}"
+            return f"{instruction}\n{strict_rule}\n\n{history_str}Customer Query: {query}"
 
-        if sentiment in ["Positive", "Neutral"] and needs_human:
-            answer = "Thank you for reaching out!. We are routing your query to a human chat agent right away."
-        elif sentiment in ["Positive", "Neutral"] and not needs_human:
-            gen_prompt = build_response_prompt(
-                "Thank the customer and answer their query accurately using the provided policy context.")
-            answer = self.generate_text(gen_prompt)
-        elif sentiment == "Negative" and needs_human:
-            answer = "We sincerely apologize for the inconvenience caused. We are immediately routing your query to an account manager."
-        elif sentiment == "Negative" and not needs_human:
-            gen_prompt = build_response_prompt(
-                "Apologize to the customer for their issue and provide a solution using the provided policy context.")
-            answer = self.generate_text(gen_prompt)
+        if sentiment == "Positive":
+            gen_prompt = build_response_prompt("Thank the customer and answer their query accurately using the provided policy context.")
+        elif sentiment == "Negative":
+            gen_prompt = build_response_prompt("Apologize to the customer for their issue and provide a solution using the provided policy context.")
         else:
-            gen_prompt = build_response_prompt(
-                "Answer the customer query clearly and helpfully using the provided policy context.")
-            answer = self.generate_text(gen_prompt)
+            gen_prompt = build_response_prompt("Answer the customer query clearly and helpfully using the provided policy context.")
+
+        answer = self.generate_text(gen_prompt)
 
         return {
             "sentiment": sentiment,
             "human_intervention_required": needs_human,
             "answer": answer
         }
+
 
 slm_service = SLMService()
