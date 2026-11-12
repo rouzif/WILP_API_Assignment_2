@@ -2,6 +2,7 @@
   {
     "id": 1,
     "query": "How do I create a new ad campaign on your platform?",
+    "requires_policy": true,
     "ideal_sentiment": "Neutral",
     "ideal_escalation": false,
     "ideal_complexity": "Simple",
@@ -10,6 +11,7 @@
   {
     "id": 2,
     "query": "My payment failed and my ad campaign was paused! This is unacceptable service!",
+    "requires_policy": false,
     "ideal_sentiment": "Negative",
     "ideal_escalation": true,
     "ideal_complexity": "Complex",
@@ -18,6 +20,7 @@
   {
     "id": 3,
     "query": "How does the second-price ad bidding auction calculate my click cost?",
+    "requires_policy": true,
     "ideal_sentiment": "Neutral",
     "ideal_escalation": false,
     "ideal_complexity": "Complex",
@@ -26,6 +29,7 @@
   {
     "id": 4,
     "query": "What is the minimum daily budget required for video ad campaigns?",
+    "requires_policy": true,
     "ideal_sentiment": "Neutral",
     "ideal_escalation": false,
     "ideal_complexity": "Simple",
@@ -34,6 +38,7 @@
   {
     "id": 5,
     "query": "Great job! My campaign conversions doubled this week, thanks!",
+    "requires_policy": false,
     "ideal_sentiment": "Positive",
     "ideal_escalation": false,
     "ideal_complexity": "Simple",

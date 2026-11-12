@@ -8,7 +8,6 @@ import json
 import time
 import requests
 from pydantic import BaseModel, Field
-from google import genai
 from tenacity import retry, stop_after_attempt, wait_exponential
 from app.config import settings
 
@@ -16,31 +15,35 @@ API_URL = "http://127.0.0.1:8000/api/v1/customer-query"
 DATASET_PATH = "./data/test_dataset.json"
 RESULTS_PATH = "./data/eval_results.json"
 
-client = genai.Client(api_key=settings.GEMINI_API_KEY)
-
 class CorrectnessEvaluation(BaseModel):
     score: int = Field(..., description="Score from 0 to 10 based on rubric match.")
     reasoning: str = Field(..., description="Brief explanation of why the score was assigned.")
 
-# Generic retry helper for evaluation LLM calls
 @retry(
     stop=stop_after_attempt(3),
-    wait=wait_exponential(multiplier=1, min=2, max=5),
+    wait=wait_exponential(multiplier=1, min=2, max=6),
     reraise=True
 )
-def call_gemini_judge_with_retry(model: str, prompt: str, response_schema=None):
-    config = {"temperature": 0.0}
-    if response_schema:
-        config["response_mime_type"] = "application/json"
-        config["response_schema"] = response_schema
-    else:
-        config["response_mime_type"] = "application/json"
+def call_gemini_judge_rest(prompt: str, json_schema: dict = None) -> str:
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/{settings.DEFAULT_MODEL}:generateContent?key={settings.GEMINI_API_KEY}"
+    generation_config = {"temperature": 0.0}
+    if json_schema:
+        generation_config["responseMimeType"] = "application/json"
+        generation_config["responseSchema"] = json_schema
 
-    return client.models.generate_content(
-        model=model,
-        contents=prompt,
-        config=config
+    payload = {
+        "contents": [{"parts": [{"text": prompt}]}],
+        "generationConfig": generation_config
+    }
+
+    response = requests.post(
+        url,
+        json=payload,
+        headers={"Content-Type": "application/json"},
+        timeout=(15, 45)
     )
+    response.raise_for_status()
+    return response.json()["candidates"][0]["content"]["parts"][0]["text"]
 
 def judge_correctness(query: str, generated_answer: str, ideal_answer: str) -> dict:
     if not generated_answer:
@@ -53,39 +56,43 @@ def judge_correctness(query: str, generated_answer: str, ideal_answer: str) -> d
         "Evaluate the Generated Answer against the Ideal Answer based on semantic correctness, policy accuracy, "
         "and factual alignment. Assign a score between 0 and 10 and provide brief reasoning."
     )
+    schema = {
+        "type": "OBJECT",
+        "properties": {
+            "score": {"type": "INTEGER"},
+            "reasoning": {"type": "STRING"}
+        },
+        "required": ["score", "reasoning"]
+    }
 
     try:
-        res = call_gemini_judge_with_retry(
-            model=settings.DEFAULT_MODEL,
-            prompt=judge_prompt,
-            response_schema=CorrectnessEvaluation
-        )
-        parsed = CorrectnessEvaluation.model_validate_json(res.text)
+        raw_text = call_gemini_judge_rest(prompt=judge_prompt, json_schema=schema)
+        parsed = CorrectnessEvaluation.model_validate_json(raw_text)
         return {"score": parsed.score, "reasoning": parsed.reasoning}
     except Exception as e:
-        print(f"[Judge Evaluation Retry Failed]: {str(e)}")
         return {"score": 5, "reasoning": f"Judge evaluation fallback due to error: {str(e)}"}
-
 
 def check_grounding(answer: str, query: str) -> bool:
     if not answer:
         return False
     prompt = (
         f"Query: {query}\nAnswer: {answer}\n"
-        "Evaluate if the answer gives explicit factual facts related to Ad Tech policies without hallucinated placeholder text like [Number]. "
-        "Reply strictly with JSON: {\"grounded\": true} or {\"grounded\": false}"
+        "Evaluate if the answer gives explicit factual facts grounded in Ad Tech policies without hallucinated "
+        "placeholder text like [Number] or [Website URL]."
     )
+    schema = {
+        "type": "OBJECT",
+        "properties": {
+            "grounded": {"type": "BOOLEAN"}
+        },
+        "required": ["grounded"]
+    }
     try:
-        res = call_gemini_judge_with_retry(
-            model=settings.DEFAULT_MODEL,
-            prompt=prompt
-        )
-        parsed = json.loads(res.text)
-        return bool(parsed.get("grounded", True))
-    except Exception as e:
-        print(f"[Grounding Check Retry Failed]: {str(e)}")
-        return True
-
+        raw_text = call_gemini_judge_rest(prompt=prompt, json_schema=schema)
+        parsed = json.loads(raw_text)
+        return bool(parsed.get("grounded", False))
+    except Exception:
+        return False
 
 def run_evaluation():
     if not os.path.exists(DATASET_PATH):
@@ -102,6 +109,7 @@ def run_evaluation():
     correct_escalation = 0
     correct_complexity = 0
     grounded_count = 0
+    policy_queries_count = 0
     correctness_scores = []
 
     total = len(test_cases)
@@ -118,7 +126,7 @@ def run_evaluation():
                     "use_rag": True,
                     "mode": "workplace"
                 },
-                timeout=60
+                timeout=180
             )
             t1 = time.time()
             latency = round(t1 - t0, 2)
@@ -128,19 +136,30 @@ def run_evaluation():
                 data = resp.json()
 
                 sent = data.get("sentiment")
-                esc = data.get("human_intervention_required") if data.get(
-                    "human_intervention_required") is not None else data.get("needs_human", False)
-                comp = data.get("query_complexity") if data.get("query_complexity") is not None else data.get(
-                    "complexity", "Simple")
+                esc = data.get("human_intervention_required") if data.get("human_intervention_required") is not None else data.get("needs_human", False)
+                comp = data.get("query_complexity") if data.get("query_complexity") is not None else data.get("complexity", "Simple")
                 ans = data.get("answer", "")
 
-                # Evaluation Matches
+                # Subtask & Router accuracy matches
                 s_match = (str(sent).strip().lower() == str(item["ideal_sentiment"]).strip().lower())
                 e_match = (bool(esc) == bool(item["ideal_escalation"]))
                 c_match = (str(comp).strip().lower() == str(item["ideal_complexity"]).strip().lower())
-                grounded = check_grounding(ans, item["query"])
 
-                # 2. Judge LLM Correctness Evaluation
+                if s_match: correct_sentiment += 1
+                if e_match: correct_escalation += 1
+                if c_match: correct_complexity += 1
+
+                # Evaluate grounding ONLY on queries that require policy lookups
+                requires_policy = item.get("requires_policy", not bool(item.get("ideal_escalation", False)))
+                if requires_policy:
+                    policy_queries_count += 1
+                    grounded = check_grounding(ans, item["query"])
+                    if grounded:
+                        grounded_count += 1
+                else:
+                    grounded = None  # Not applicable for non-policy queries
+
+                # Judge LLM Correctness Evaluation
                 judge_eval = judge_correctness(
                     query=item["query"],
                     generated_answer=ans,
@@ -148,14 +167,10 @@ def run_evaluation():
                 )
                 correctness_scores.append(judge_eval["score"])
 
-                if s_match: correct_sentiment += 1
-                if e_match: correct_escalation += 1
-                if c_match: correct_complexity += 1
-                if grounded: grounded_count += 1
-
                 results.append({
                     "id": item["id"],
                     "query": item["query"],
+                    "requires_policy": requires_policy,
                     "predicted_sentiment": sent,
                     "ideal_sentiment": item["ideal_sentiment"],
                     "sentiment_match": s_match,
@@ -181,13 +196,15 @@ def run_evaluation():
     total_time = time.time() - start_all
     throughput = round(total / total_time, 2) if total_time > 0 else 0
     avg_correctness = round(sum(correctness_scores) / len(correctness_scores), 2) if correctness_scores else 0.0
+    grounding_rate = round((grounded_count / policy_queries_count) * 100, 2) if policy_queries_count > 0 else 0.0
 
     summary = {
         "total_queries": total,
+        "policy_queries_evaluated": policy_queries_count,
         "sentiment_accuracy": round((correct_sentiment / total) * 100, 2) if total else 0,
         "escalation_accuracy": round((correct_escalation / total) * 100, 2) if total else 0,
         "complexity_accuracy": round((correct_complexity / total) * 100, 2) if total else 0,
-        "grounding_accuracy": round((grounded_count / total) * 100, 2) if total else 0,
+        "grounding_accuracy": grounding_rate,
         "mean_correctness_score": avg_correctness,
         "avg_latency_sec": round(sum(latencies) / len(latencies), 2) if latencies else 0,
         "throughput_qps": throughput,
@@ -198,8 +215,11 @@ def run_evaluation():
     with open(RESULTS_PATH, "w") as f:
         json.dump(summary, f, indent=2)
 
-    print(f"Evaluation complete! Mean Correctness Score: {avg_correctness}/10. Results saved to {RESULTS_PATH}.")
-
+    print(
+        f"Evaluation complete! Grounding Rate: {grounding_rate}% "
+        f"({grounded_count}/{policy_queries_count} policy queries) | "
+        f"Mean Correctness: {avg_correctness}/10."
+    )
 
 if __name__ == "__main__":
     run_evaluation()
